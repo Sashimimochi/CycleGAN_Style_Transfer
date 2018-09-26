@@ -4,16 +4,18 @@ import json
 import re
 import gensim
 import random
+from flags import FLAGS
 
 class data_utils():
     def __init__(self,args):
-        self.data_path = 'data/feature_twitter.txt'
+        self.data_train = 'data/source_train'
+        self.data_test = 'data/source_test'
         self.num_batch = 12
         self.sent_length = args.sequence_length
         self.batch_size = args.batch_size
         
-        self.set_dictionary('word2vec_model/dictionary.json')
-        self.set_word2vec_model('word2vec_model/model')
+        self.set_dictionary('data/dict')
+        self.set_word2vec_model('data/word_vec')
 
 
     def set_dictionary(self, dict_file):
@@ -24,6 +26,7 @@ class data_utils():
 
             self.BOS_id = self.word_id_dict['__BOS__']
             self.EOS_id = self.word_id_dict['__EOS__']
+            self.UNK_id = self.word_id_dict['__UNK__']
 
             self.id_word_dict = [[]]*len(self.word_id_dict)
             for word in self.word_id_dict:
@@ -44,15 +47,20 @@ class data_utils():
 
     def sent2id(self,sent):
         vec = np.zeros((self.sent_length),dtype=np.int32) + self.EOS_id
-        pat = re.compile('(\W+)')
-        sent_list = ' '.join(re.split(pat,sent.lower().strip())).split()
+
+        #vec[0] = self.BOS_id
         i = 0
-        for word in sent_list:
+        for word in sent.decode('utf8').split():
             if word in self.word_id_dict:
                 vec[i] = self.word_id_dict[word]
-                i += 1
+            else:
+                vec[i] = self.UNK_id
+            i += 1
             if i>=self.sent_length:
                 break
+        while i < self.sent_length:
+          vec[i] = self.EOS_id
+          i += 1
         return vec
 
 
@@ -63,7 +71,7 @@ class data_utils():
             word = possible_words[0][0]
             sent.append(word)
 
-        return ' '.join(sent)
+        return ' '.join(sent).encode('utf8')
 
 
     def id2sent(self,indices):
@@ -75,7 +83,7 @@ class data_utils():
 
     def data_generator(self,class_id):
         while(1):
-            with open(self.data_path) as fp:
+            with open(self.data_train) as fp:
                 for line in fp:
                     s = line.strip().split('+++$+++')
                     if int(s[0])==class_id and random.randint(0,10) >= 2:
@@ -90,6 +98,24 @@ class data_utils():
 
 
     def gan_data_generator(self):
+        while(1):
+            one_X_batch = []
+            one_Y_batch = []
+            with open(self.data_train) as fp:
+                for line in fp:
+                    s = line.strip().split('+++$+++')
+                    if int(s[0])==0 and random.randint(0,10) >= 3 and len(one_X_batch) < self.batch_size*self.num_batch:
+                        one_X_batch.append(self.sent2id(s[1].strip()))
+                    elif int(s[0])==1 and random.randint(0,10) >= 3 and len(one_Y_batch) < self.batch_size*self.num_batch:
+                        one_Y_batch.append(self.sent2id(s[1].strip()))
+
+                    if len(one_X_batch) == self.batch_size*self.num_batch and len(one_Y_batch) == self.batch_size*self.num_batch:
+                        one_X_batch = np.array(one_X_batch).reshape(self.num_batch,self.batch_size,-1)
+                        one_Y_batch = np.array(one_Y_batch).reshape(self.num_batch,self.batch_size,-1)
+                        yield one_X_batch,one_Y_batch
+                        one_X_batch = []
+                        one_Y_batch = []
+        """
         one_X_batch = []
         one_Y_batch = []
 
@@ -102,13 +128,30 @@ class data_utils():
                 yield one_X_batch,one_Y_batch
                 one_X_batch = []
                 one_Y_batch = []
-
+        """
 
     def pretrain_generator_data_generator(self):
-        one_X_batch = []
-        one_Y_batch = []
 
+        while(1):
+            one_X_batch = []
+            one_Y_batch = []
+            with open(self.data_train) as fp:
+                for line in fp:
+                    s = line.strip().split('+++$+++')
+                    if int(s[0])==0 and random.randint(0,10) >= 3 and len(one_X_batch) < self.batch_size:
+                        one_X_batch.append(self.sent2id(s[1].strip()))
+                    elif int(s[0])==1 and random.randint(0,10) >= 3 and len(one_Y_batch) < self.batch_size:
+                        one_Y_batch.append(self.sent2id(s[1].strip()))
+
+                    if len(one_X_batch) == self.batch_size and len(one_Y_batch) == self.batch_size:
+                        one_X_batch = np.array(one_X_batch)
+                        one_Y_batch = np.array(one_Y_batch)
+                        yield one_X_batch,one_Y_batch
+                        one_X_batch = []
+                        one_Y_batch = []
+        """
         for one_X,one_Y in zip(self.X_data_generator(),self.Y_data_generator()):
+            print 'one data pair ......'
             one_X_batch.append(one_X)
             one_Y_batch.append(one_Y)
             if len(one_X_batch) == self.batch_size:
@@ -117,18 +160,22 @@ class data_utils():
                 yield one_X_batch,one_Y_batch
                 one_X_batch = []
                 one_Y_batch = []
-
+                print 'one batch'
+        """
 
     def test_data_generator(self):
         one_batch = np.zeros([self.batch_size,self.sent_length])
+        sents = []
         batch_count = 0
-        for line in open('seq2seq_test.txt'):
+        for line in open(FLAGS.data_dir+'/source_test'):
             one_batch[batch_count] = self.sent2id(line.strip())
+            sents.append(line)
             batch_count += 1
             if batch_count == self.batch_size:
-                yield one_batch
+                yield one_batch, sents
                 batch_count = 0
                 one_batch = np.zeros([self.batch_size,self.sent_length])
+                sents = []
 
         if batch_count >= 1:
-            yield one_batch
+            yield one_batch, sents

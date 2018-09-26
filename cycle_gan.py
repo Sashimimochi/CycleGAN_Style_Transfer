@@ -22,9 +22,10 @@ class cycle_gan():
         self.do_gradient_penalty = True
         self.sequence_length = args.sequence_length
         self.batch_size = args.batch_size
-        self.num_steps =args.num_steps
-        self.load_model = args.load
+        self.num_steps = args.num_steps
         self.saving_step = args.saving_step
+        self.printing_step = args.printing_step
+        self.data_dir = args.data_dir
 
 
         #trivial things
@@ -62,8 +63,8 @@ class cycle_gan():
             self.discriminator_variables = [v for v in tf.trainable_variables() if v.name.startswith("discriminator")]
 
             #get all saver with specific variable name
-            self.generator_saver = tf.train.Saver(self.generator_variables,max_to_keep=6)
-            self.discriminator_saver = tf.train.Saver(self.discriminator_variables,max_to_keep=2)
+            self.generator_saver = tf.train.Saver(self.generator_variables,max_to_keep=5)
+            self.discriminator_saver = tf.train.Saver(self.discriminator_variables,max_to_keep=5)
 
 
         def get_discriminator_loss(real_sample_score,false_sample_score,gradient_penalty):
@@ -286,8 +287,8 @@ class cycle_gan():
     def pretrain(self):
         #use auto-encoder to pretrain the generator     
         step = 0
-        saving_step = 1000
-        summary_step = int(50)
+        saving_step = self.saving_step
+        summary_step = self.printing_step
         
         print('Start pretrain generator!!!!')
 
@@ -297,7 +298,12 @@ class cycle_gan():
         model_path = os.path.join(model_dir,'model')
         saver = self.generator_saver
         cur_loss = 0.0
-
+       
+        ckpt = tf.train.get_checkpoint_state(model_dir)
+        if ckpt:
+          print('load model from:', model_dir)
+          saver.restore(self.sess, ckpt.model_checkpoint_path)
+        
         self.sess.run(tf.global_variables_initializer())
 
         for X_batch,Y_batch in self.utils.pretrain_generator_data_generator():
@@ -331,8 +337,8 @@ class cycle_gan():
 
         print('Start training whole model!!')
         step = 0
-        saving_step = 1000
-        summary_step = int(50)
+        saving_step = self.saving_step
+        summary_step = self.printing_step
         #init model config
         self.sess.run(tf.global_variables_initializer())
             
@@ -352,9 +358,11 @@ class cycle_gan():
         dis_X_loss = 0.0;dis_Y_loss = 0.0;xy_l = 0.0;yx_l = 0.0;xy_r = 0.0;yx_r = 0.0
 
         self.generator_saver.restore(self.sess,tf.train.latest_checkpoint(gen_model_dir))
-        if self.load_model:
-            print('load model from:',self.model_dir)
-            self.discriminator_saver.restore(self.sess,tf.train.latest_checkpoint(dis_model_dir))
+        
+        ckpt = tf.train.get_checkpoint_state(dis_model_dir)
+        if ckpt:
+          print('load model from:', dis_model_dir)
+          self.discriminator_saver.restore(self.sess, ckpt.model_checkpoint_path)
 
         for real_X_batches,real_Y_batches in self.utils.gan_data_generator():
             step += 1
@@ -405,8 +413,10 @@ class cycle_gan():
                       x_l=dis_X_loss/summary_step,y_l=dis_Y_loss/summary_step,step=step,xy_l=xy_l/summary_step,\
                       yx_l=yx_l/summary_step,xy_r=xy_r/summary_step,yx_r=yx_r/summary_step))
                 if step>self.pretrain_discriminator_steps:
-                    print('origin_X:',self.utils.id2sent(origin[0]))
-                    print('pred:',self.utils.vec2sent(pred[0]))
+                    print('origin_X:')
+                    print(self.utils.id2sent(origin[0]))
+                    print('pred:')
+                    print(self.utils.vec2sent(pred[0]))
                 print('')
                 dis_X_loss = 0.0;dis_Y_loss = 0.0;xy_l = 0.0;yx_l = 0.0;xy_r = 0.0;yx_r = 0.0
                 
@@ -443,18 +453,19 @@ class cycle_gan():
 
     def file_test(self):
         line_count = 0
-        out_fp = open('test_out.txt','w')
+        out_fp = open(self.data_dir+'/test_out.txt','w')
         gen_model_dir = os.path.join(self.model_dir,'generator/')
         self.sess.run(tf.global_variables_initializer())
         self.generator_saver.restore(self.sess, tf.train.latest_checkpoint(gen_model_dir))
-        for test_batch in self.utils.test_data_generator():
+        for test_batch, sents in self.utils.test_data_generator():
             feed_dict = {self.X2Y_inputs:test_batch}
             preds = self.sess.run([self.X2Y_test_outputs],feed_dict)
             preds = preds[0]
-            for pred in preds:
+            for pred, s in zip(preds, sents):
+                out_fp.write(s + ' -> ')
                 out_fp.write(self.utils.vec2sent(pred) + '\n')
                 line_count += 1
-                if line_count>=28658:
-                    break
-            if line_count>=28658:
-                break
+                #if line_count>=28658:
+                #    break
+            #if line_count>=28658:
+            #    break

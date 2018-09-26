@@ -5,9 +5,10 @@ import tensorflow as tf
 import tflib as tflib
 import tflib.ops.linear
 import tflib.ops.conv1d
+from flags import FLAGS
 
 DIM = 512
-SEQ_LEN = 26
+SEQ_LEN = FLAGS.sequence_length + 1
 
 def ResBlock(name, inputs):
     output = inputs
