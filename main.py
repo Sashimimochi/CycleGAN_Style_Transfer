@@ -10,7 +10,7 @@ def run():
         model.train()
     if FLAGS.mode == 'train' and FLAGS.mode_train=='pretrain':
         model.pretrain()
-    if FLAGS.mode == 'file_test':
+    if FLAGS.mode == 'test_f':
         model.file_test()
     if FLAGS.mode == 'test':
         model.test()

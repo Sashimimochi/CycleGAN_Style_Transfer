@@ -6,16 +6,17 @@ import gensim
 import random
 from flags import FLAGS
 
-class data_utils():
+class utils():
     def __init__(self,args):
-        self.data_train = 'data/source_train'
-        self.data_test = 'data/source_test'
-        self.num_batch = 12
+        self.data_dir = FLAGS.data_dir
+        self.data_train = os.path.join(self.data_dir, 'source_train')
+        self.data_test = os.path.join(self.data_dir, 'source_test')
+        self.num_batch = args.dis_it + args.gen_it + 1
         self.sent_length = args.sequence_length
         self.batch_size = args.batch_size
         
-        self.set_dictionary('data/dict')
-        self.set_word2vec_model('data/word_vec')
+        self.set_dictionary(os.path.join(self.data_dir, 'dict'))
+        self.set_word2vec_model(os.path.join(self.data_dir, 'word_vec'))
 
 
     def set_dictionary(self, dict_file):
@@ -39,7 +40,7 @@ class data_utils():
         word_array = []
         self.word2vec_model = gensim.models.Word2Vec.load(name)
         for i in range(len(self.id_word_dict)):
-            word = self.id_word_dict[i]
+            word = self.id_word_dict[i].encode('utf8')
             word_array.append(self.word2vec_model[word])
 
         self.word_array = np.array(word_array)
@@ -71,7 +72,7 @@ class data_utils():
             word = possible_words[0][0]
             sent.append(word)
 
-        return ' '.join(sent).encode('utf8')
+        return ' '.join(sent)
 
 
     def id2sent(self,indices):
@@ -168,7 +169,8 @@ class data_utils():
         sents = []
         batch_count = 0
         for line in open(FLAGS.data_dir+'/source_test'):
-            one_batch[batch_count] = self.sent2id(line.strip())
+            line = ' '.join(line.strip().split()[2:])
+            one_batch[batch_count] = self.sent2id(line)
             sents.append(line)
             batch_count += 1
             if batch_count == self.batch_size:

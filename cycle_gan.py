@@ -2,7 +2,7 @@ from lib.seq2seq import seq2seq
 from lib.discriminator import discriminator
 from lib.discriminator_X import discriminator_X
 from lib.ops import *
-from data_utils import *
+from utils import *
 from functools import reduce
 import tensorflow as tf
 import numpy as np
@@ -17,8 +17,10 @@ class cycle_gan():
         self.mode = args.mode
         
         #model config
-        self.pretrain_discriminator_steps = 0
-        self.discriminator_iterations = args.dis_iter
+        self.id_loss = args.id_loss
+        self.pretrain_discriminator_steps = args.pre_dis
+        self.dis_it = args.dis_it
+        self.gen_it = args.gen_it
         self.do_gradient_penalty = True
         self.sequence_length = args.sequence_length
         self.batch_size = args.batch_size
@@ -26,19 +28,23 @@ class cycle_gan():
         self.saving_step = args.saving_step
         self.printing_step = args.printing_step
         self.data_dir = args.data_dir
+        self.load = args.load
 
 
         #trivial things
         self.lstm_length = [self.sequence_length+1 for _ in range(self.batch_size)] 
-        self.utils = data_utils(args)
+        self.utils = utils(args)
 
         #the model of generator, reconstructor, discriminator will be save in seperately directory
         self.model_dir = args.model_dir
+        if not os.path.exists(self.model_dir):
+            os.makedirs(self.model_dir)
 
         self.vocab_size = len(self.utils.id_word_dict)
         self.word_embedding_dim = 200
         self.BOS = self.utils.BOS_id
         self.EOS = self.utils.EOS_id
+        
 
         self.build_model()
 
@@ -108,6 +114,7 @@ class cycle_gan():
         def build_XYX_graph():
             with tf.variable_scope("XYX_inputs"):
                 self.X2Y_inputs = tf.placeholder(dtype=tf.int32, shape=(self.batch_size, self.sequence_length))
+                self.Y2Y_inputs = tf.placeholder(dtype=tf.int32, shape=(self.batch_size, self.sequence_length))
                 X2Y_inputs = tf.concat([self.X2Y_inputs,EOS_slice],axis=1)
                 X2Y_inputs = tf.nn.embedding_lookup(word_embedding_matrix, X2Y_inputs)
 
@@ -122,6 +129,11 @@ class cycle_gan():
                 if self.mode=='pretrain':
                     X2Y_decoder_inputs = tf.concat([BOS_slice,self.X2Y_inputs],axis=1)
                 X2Y_decoder_inputs = tf.nn.embedding_lookup(word_embedding_matrix, X2Y_decoder_inputs)
+               
+                Y2Y_inputs = tf.concat([self.Y2Y_inputs,EOS_slice],axis=1)
+                Y2Y_inputs = tf.nn.embedding_lookup(word_embedding_matrix, Y2Y_inputs)
+                Y2Y_decoder_inputs = tf.concat([BOS_slice,self.Y2Y_inputs],axis=1)
+                Y2Y_decoder_inputs = tf.nn.embedding_lookup(word_embedding_matrix, Y2Y_decoder_inputs)
                 
 
             with tf.variable_scope("generator_X2Y") as scope:
@@ -133,7 +145,15 @@ class cycle_gan():
                     mode = self.mode
                 )
                 self.X2Y_test_outputs = X2Y_outputs
-
+                
+                scope.reuse_variables()
+                Y2Y_outputs = seq2seq(
+                    encoder_inputs = Y2Y_inputs,
+                    encoder_length = self.lstm_length,
+                    decoder_inputs = Y2Y_decoder_inputs,
+                    word_embedding_dim = self.word_embedding_dim,
+                    mode = 'pretrain'
+                )
 
             with tf.variable_scope("generator_Y2X") as scope:
                 Y2X_rec_outputs = seq2seq(
@@ -162,6 +182,8 @@ class cycle_gan():
 
                 self.discriminator_Y_loss = get_discriminator_loss(real_Y_sample_score,false_Y_sample_score,dis_Y_penalty)
 
+                self.Y2Y_loss = get_L2_loss(Y2Y_inputs, Y2Y_outputs)
+
                 self.pretrain_X2Y_loss = get_L2_loss(X2Y_inputs,X2Y_outputs)
 
         """
@@ -169,6 +191,7 @@ class cycle_gan():
         """
         def build_YXY_graph():
             with tf.variable_scope("YXY_inputs") as scope:
+                self.X2X_inputs = tf.placeholder(dtype=tf.int32, shape=(self.batch_size, self.sequence_length))
                 self.Y2X_inputs = tf.placeholder(dtype=tf.int32, shape=(self.batch_size, self.sequence_length))
                 Y2X_inputs = tf.concat([self.Y2X_inputs,EOS_slice],axis=1)
                 Y2X_inputs = tf.nn.embedding_lookup(word_embedding_matrix, Y2X_inputs)
@@ -185,6 +208,11 @@ class cycle_gan():
                     Y2X_decoder_inputs = tf.concat([BOS_slice,self.Y2X_inputs],axis=1)
                 Y2X_decoder_inputs = tf.nn.embedding_lookup(word_embedding_matrix, Y2X_decoder_inputs)
 
+                X2X_inputs = tf.concat([self.X2X_inputs,EOS_slice],axis=1)
+                X2X_inputs = tf.nn.embedding_lookup(word_embedding_matrix, X2X_inputs)
+                X2X_decoder_inputs = tf.concat([BOS_slice,self.X2X_inputs],axis=1)
+                X2X_decoder_inputs = tf.nn.embedding_lookup(word_embedding_matrix, X2X_decoder_inputs)
+
 
             with tf.variable_scope("generator_Y2X") as scope:
                 scope.reuse_variables()
@@ -196,6 +224,15 @@ class cycle_gan():
                     mode = self.mode
                 )
                 self.Y2X_test_outputs = Y2X_outputs
+
+                scope.reuse_variables()
+                X2X_outputs = seq2seq(
+                    encoder_inputs = X2X_inputs,
+                    encoder_length = self.lstm_length,
+                    decoder_inputs = X2X_decoder_inputs,
+                    word_embedding_dim = self.word_embedding_dim,
+                    mode = 'pretrain'
+                )
 
 
             with tf.variable_scope("generator_X2Y") as scope:
@@ -224,8 +261,9 @@ class cycle_gan():
                 
                 self.discriminator_X_loss = get_discriminator_loss(real_X_sample_score,false_X_sample_score,dis_X_penalty)
 
-                self.pretrain_Y2X_loss = get_L2_loss(Y2X_inputs,Y2X_outputs)
+                self.X2X_loss = get_L2_loss(X2X_inputs, X2X_outputs)
 
+                self.pretrain_Y2X_loss = get_L2_loss(Y2X_inputs,Y2X_outputs)
 
         """
         the graph begin in here
@@ -250,6 +288,9 @@ class cycle_gan():
         with tf.variable_scope('generator_loss') as scope:
             self.generator_X2Y_loss = (self.Y2X_reconstruction_loss + self.X2Y_reconstruction_loss)*2.0 - self.false_Y_sample_score
             self.generator_Y2X_loss = (self.Y2X_reconstruction_loss + self.X2Y_reconstruction_loss)*2.0 - self.false_X_sample_score
+            if self.id_loss:
+              self.generator_X2Y_loss += self.Y2Y_loss
+              self.generator_Y2X_loss += self.X2X_loss
 
 
         with tf.variable_scope('optimizer') as scope:
@@ -292,7 +333,7 @@ class cycle_gan():
         
         print('Start pretrain generator!!!!')
 
-        model_dir = os.path.join(self.model_dir,'generator/')
+        model_dir = os.path.join(self.model_dir, 'pretrain_generator/')
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
         model_path = os.path.join(model_dir,'model')
@@ -318,13 +359,16 @@ class cycle_gan():
             cur_loss += ( loss_X2Y + loss_Y2X ) / 2.0
 
             if step%(summary_step)==0:
+                print('origin_X:')
+                print(self.utils.id2sent(Y_batch[0].tolist()))
+                print('pred:')
                 print(self.utils.vec2sent(tt[0]))
-                print('{step}: generator_loss: {loss}'.format(step=step,loss=cur_loss/summary_step))
+                print('{step}: generator_loss: {loss}\n'.format(step=step,loss=cur_loss/summary_step))
                 cur_loss = 0.0
 
 
             if step%saving_step==0:
-                print('saving.........')
+                print('saving step : {}.........\n'.format(step))
                 saver.save(self.sess, model_path, global_step=step)
                 saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
 
@@ -349,15 +393,16 @@ class cycle_gan():
             os.makedirs(dis_model_dir)
 
         #generator model
+        pre_gen_dir = os.path.join(self.model_dir, 'pretrain_generator/')
         gen_model_dir = os.path.join(self.model_dir,'generator/')
         gen_model_path = os.path.join(gen_model_dir,'whole_model')
         if not os.path.exists(gen_model_dir):
             os.makedirs(gen_model_dir)
 
         #init loss
-        dis_X_loss = 0.0;dis_Y_loss = 0.0;xy_l = 0.0;yx_l = 0.0;xy_r = 0.0;yx_r = 0.0
+        dis_X_loss = 0.0;dis_Y_loss = 0.0;xy_l = 0.0;yx_l = 0.0;xy_r = 0.0;yx_r = 0.0;fxy = 0.0;fyx = 0.0;yy_r = 0.0;xx_r = 0.0
 
-        self.generator_saver.restore(self.sess,tf.train.latest_checkpoint(gen_model_dir))
+        self.generator_saver.restore(self.sess,tf.train.latest_checkpoint(pre_gen_dir))
         
         ckpt = tf.train.get_checkpoint_state(dis_model_dir)
         if ckpt:
@@ -366,9 +411,9 @@ class cycle_gan():
 
         for real_X_batches,real_Y_batches in self.utils.gan_data_generator():
             step += 1
-
+            
             #train discriminator
-            for i in range(self.discriminator_iterations):
+            for i in range(self.dis_it):
                 feed_dict = {
                     self.X2Y_inputs:real_X_batches[i+1],
                     self.Y2X_inputs:real_Y_batches[i+1],
@@ -382,43 +427,69 @@ class cycle_gan():
                     self.discriminator_X_loss,self.discriminator_Y_loss],\
                     feed_dict=feed_dict)
 
-                dis_X_loss += loss_X/self.discriminator_iterations
-                dis_Y_loss += loss_Y/self.discriminator_iterations
+                dis_X_loss += loss_X
+                dis_Y_loss += loss_Y
 
             #train generator
             if step>=self.pretrain_discriminator_steps:
-                #train generator only
-                feed_dict = {
-                    self.X2Y_inputs:real_X_batches[self.discriminator_iterations + 3],
-                    self.Y2X_inputs:real_Y_batches[self.discriminator_iterations + 3]
-                }
-                
-                _,_,l0,l1,r0,r1,pred = self.sess.run(
-                    [self.train_X2Y_op,self.train_Y2X_op,\
-                    self.generator_X2Y_loss,self.generator_Y2X_loss,\
-                    self.X2Y_reconstruction_loss,self.Y2X_reconstruction_loss,self.X2Y_test_outputs],\
-                    feed_dict=feed_dict)
-                
-                xy_l += l0
-                yx_l += l1
-                xy_r += r0
-                yx_r += r1
+                for i in range(self.gen_it):
+                    #train generator only
+                    feed_dict = {
+                        self.X2Y_inputs:real_X_batches[self.dis_it + 1 + i],
+                        self.Y2X_inputs:real_Y_batches[self.dis_it + 1 + i],
+                        self.X2X_inputs:real_X_batches[self.dis_it + 1 + i],
+                        self.Y2Y_inputs:real_Y_batches[self.dis_it + 1 + i]
+                    }
+                    
+                    if self.id_loss:
+                      _, _, l0, l1, r0, r1,f0, f1, ry, rx, pred = self.sess.run(
+                        [self.train_X2Y_op,self.train_Y2X_op,\
+                        self.generator_X2Y_loss,self.generator_Y2X_loss,\
+                        self.X2Y_reconstruction_loss,self.Y2X_reconstruction_loss,\
+                        self.false_Y_sample_score, self.false_X_sample_score,\
+                        self.Y2Y_loss, self.X2X_loss,\
+                        self.X2Y_test_outputs],\
+                        feed_dict=feed_dict)
+                      yy_r += ry
+                      xx_r += rx
+                    else:
+                      _, _, l0, l1, r0, r1,f0, f1, pred = self.sess.run(
+                        [self.train_X2Y_op,self.train_Y2X_op,\
+                        self.generator_X2Y_loss,self.generator_Y2X_loss,\
+                        self.X2Y_reconstruction_loss,self.Y2X_reconstruction_loss,\
+                        self.false_Y_sample_score, self.false_X_sample_score,\
+                        self.X2Y_test_outputs],\
+                        feed_dict=feed_dict)
+                    
+                    xy_l += l0
+                    yx_l += l1
+                    xy_r += r0
+                    yx_r += r1
+                    fxy += f0
+                    fyx += f1
 
-                origin = real_X_batches[self.discriminator_iterations + 3]
+                origin = real_X_batches[self.dis_it + self.gen_it]
 
             #make summary
-            if step%(summary_step)==1:
-                print('step: {step} dis_X_loss: {x_l} dis_Y_loss: {y_l} generator_X2Y_loss: {xy_l} generator_Y2X_loss {yx_l}'
-                      ' X2Y_reconstruction_loss {xy_r} Y2X_reconstruction_loss {yx_r}'.format(\
-                      x_l=dis_X_loss/summary_step,y_l=dis_Y_loss/summary_step,step=step,xy_l=xy_l/summary_step,\
-                      yx_l=yx_l/summary_step,xy_r=xy_r/summary_step,yx_r=yx_r/summary_step))
+            if step%(summary_step)==0:
+                print('step: {step}\n   dis_X_loss: {x_l}   dis_Y_loss: {y_l}'.format(
+                        step=step, x_l=dis_X_loss/summary_step/self.dis_it,y_l=dis_Y_loss/summary_step/self.dis_it))
                 if step>self.pretrain_discriminator_steps:
+                    print('   generator_X2Y_loss: {xy_l}   generator_Y2X_loss: {yx_l}'
+                          '\n   X2Y_recon_loss: {xy_r}   Y2X_recon_loss: {yx_r}'
+                          '\n   false_Y_score: {fxy}   false_X_score: {fyx}'
+                          '\n   Y2Y_loss: {yy_r}   X2X_loss: {xx_r}'.format(
+                          xy_l=xy_l/summary_step/self.gen_it,yx_l=yx_l/summary_step/self.gen_it,
+                          xy_r=xy_r/summary_step/self.gen_it,yx_r=yx_r/summary_step/self.gen_it,
+                          fxy=fxy//summary_step/self.gen_it,fyx=fyx/summary_step/self.gen_it,
+                          yy_r=yy_r/summary_step/self.gen_it,xx_r=xx_r/summary_step/self.gen_it
+                          ))
                     print('origin_X:')
                     print(self.utils.id2sent(origin[0]))
                     print('pred:')
                     print(self.utils.vec2sent(pred[0]))
                 print('')
-                dis_X_loss = 0.0;dis_Y_loss = 0.0;xy_l = 0.0;yx_l = 0.0;xy_r = 0.0;yx_r = 0.0
+                dis_X_loss = 0.0;dis_Y_loss = 0.0;xy_l = 0.0;yx_l = 0.0;xy_r = 0.0;yx_r = 0.0;fxy = 0.0;fyx = 0.0;yy_r = 0.0;xx_r = 0.0
                 
             if step%saving_step==0:
                 print('saving model!!!!......')
@@ -427,7 +498,6 @@ class cycle_gan():
 
             if step>=self.num_steps:
                 break
-
 
     def test(self):
         sentence = 'hi'
@@ -453,19 +523,22 @@ class cycle_gan():
 
     def file_test(self):
         line_count = 0
-        out_fp = open(self.data_dir+'/test_out.txt','w')
+        #out_fp = open(self.data_dir+'/test_out.txt','w')
         gen_model_dir = os.path.join(self.model_dir,'generator/')
         self.sess.run(tf.global_variables_initializer())
-        self.generator_saver.restore(self.sess, tf.train.latest_checkpoint(gen_model_dir))
+
+        if self.load != '':
+          self.generator_saver.restore(self.sess, self.load)
+        else:
+          self.generator_saver.restore(self.sess, tf.train.latest_checkpoint(gen_model_dir))
+          
         for test_batch, sents in self.utils.test_data_generator():
             feed_dict = {self.X2Y_inputs:test_batch}
             preds = self.sess.run([self.X2Y_test_outputs],feed_dict)
             preds = preds[0]
             for pred, s in zip(preds, sents):
-                out_fp.write(s + ' -> ')
-                out_fp.write(self.utils.vec2sent(pred) + '\n')
+                #out_fp.write(s + ' -> ')
+                #out_fp.write(self.utils.vec2sent(pred) + '\n')
+                print "    {}\n->  {}\n".format(s, self.utils.vec2sent(pred))
                 line_count += 1
-                #if line_count>=28658:
-                #    break
-            #if line_count>=28658:
-            #    break
+
