@@ -6,16 +6,17 @@ from flags import FLAGS
 def run():
     sess = tf.Session()
     model = cycle_gan(FLAGS, sess)
-    if FLAGS.mode == 'train' and FLAGS.mode_train=='all':
+    if FLAGS.mode == 'train':
         model.train()
-    if FLAGS.mode == 'train' and FLAGS.mode_train=='pretrain':
+    elif FLAGS.mode == 'pretrain':
         model.pretrain()
-    if FLAGS.mode == 'test_f':
-        model.file_test()
-    if FLAGS.mode == 'test':
+    elif FLAGS.mode == 'val':
+        model.val()
+    elif FLAGS.mode == 'val_pre':
+        model.val_pre()
+    elif FLAGS.mode == 'test':
         model.test()
 
 if __name__ == '__main__':
-    #args = parse()
     run()
 

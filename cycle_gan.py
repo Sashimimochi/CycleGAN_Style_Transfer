@@ -6,7 +6,7 @@ from utils import *
 from functools import reduce
 import tensorflow as tf
 import numpy as np
-import os
+import os, csv
 
 class cycle_gan():
 
@@ -29,7 +29,7 @@ class cycle_gan():
         self.printing_step = args.printing_step
         self.data_dir = args.data_dir
         self.load = args.load
-
+        self.output = args.output
 
         #trivial things
         self.lstm_length = [self.sequence_length+1 for _ in range(self.batch_size)] 
@@ -40,11 +40,13 @@ class cycle_gan():
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
 
+        self.dis_dir = os.path.join(self.model_dir, 'discriminator_{}_{}{}/'.format(self.dis_it, self.gen_it, '_id' if self.id_loss else ''))
+        self.gen_dir = os.path.join(self.model_dir, 'generator_{}_{}{}/'.format(self.dis_it, self.gen_it, '_id' if self.id_loss else ''))
+
         self.vocab_size = len(self.utils.id_word_dict)
         self.word_embedding_dim = 200
         self.BOS = self.utils.BOS_id
         self.EOS = self.utils.EOS_id
-        
 
         self.build_model()
 
@@ -70,7 +72,7 @@ class cycle_gan():
 
             #get all saver with specific variable name
             self.generator_saver = tf.train.Saver(self.generator_variables,max_to_keep=5)
-            self.discriminator_saver = tf.train.Saver(self.discriminator_variables,max_to_keep=5)
+            self.discriminator_saver = tf.train.Saver(self.discriminator_variables,max_to_keep=10)
 
 
         def get_discriminator_loss(real_sample_score,false_sample_score,gradient_penalty):
@@ -340,12 +342,12 @@ class cycle_gan():
         saver = self.generator_saver
         cur_loss = 0.0
        
+        self.sess.run(tf.global_variables_initializer())
         ckpt = tf.train.get_checkpoint_state(model_dir)
         if ckpt:
           print('load model from:', model_dir)
           saver.restore(self.sess, ckpt.model_checkpoint_path)
-        
-        self.sess.run(tf.global_variables_initializer())
+          step = int(ckpt.model_checkpoint_path.split('-')[-1])
 
         for X_batch,Y_batch in self.utils.pretrain_generator_data_generator():
             step += 1
@@ -370,7 +372,7 @@ class cycle_gan():
             if step%saving_step==0:
                 print('saving step : {}.........\n'.format(step))
                 saver.save(self.sess, model_path, global_step=step)
-                saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
+                #saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
 
             if step>=self.num_steps:
                 break
@@ -387,28 +389,34 @@ class cycle_gan():
         self.sess.run(tf.global_variables_initializer())
             
         #discriminator model
-        dis_model_dir = os.path.join(self.model_dir,'discriminator/')
+        dis_model_dir = self.dis_dir
         dis_model_path = os.path.join(dis_model_dir,'whole_model')
         if not os.path.exists(dis_model_dir):
             os.makedirs(dis_model_dir)
 
         #generator model
         pre_gen_dir = os.path.join(self.model_dir, 'pretrain_generator/')
-        gen_model_dir = os.path.join(self.model_dir,'generator/')
+        gen_model_dir = self.gen_dir
         gen_model_path = os.path.join(gen_model_dir,'whole_model')
         if not os.path.exists(gen_model_dir):
             os.makedirs(gen_model_dir)
 
         #init loss
-        dis_X_loss = 0.0;dis_Y_loss = 0.0;xy_l = 0.0;yx_l = 0.0;xy_r = 0.0;yx_r = 0.0;fxy = 0.0;fyx = 0.0;yy_r = 0.0;xx_r = 0.0
+        dis_X_loss = 0.0; dis_Y_loss = 0.0; xy_l = 0.0; yx_l = 0.0
+        xy_r = 0.0; yx_r = 0.0; fxy = 0.0;  fyx = 0.0;  yy_r = 0.0; xx_r = 0.0
 
-        self.generator_saver.restore(self.sess,tf.train.latest_checkpoint(pre_gen_dir))
         
         ckpt = tf.train.get_checkpoint_state(dis_model_dir)
         if ckpt:
           print('load model from:', dis_model_dir)
           self.discriminator_saver.restore(self.sess, ckpt.model_checkpoint_path)
-
+          ckpt = tf.train.get_checkpoint_state(gen_model_dir)
+          print('load model from:', gen_model_dir)
+          self.generator_saver.restore(self.sess, ckpt.model_checkpoint_path)
+          step = int(ckpt.model_checkpoint_path.split('-')[-1])
+        else:
+          self.generator_saver.restore(self.sess,tf.train.latest_checkpoint(pre_gen_dir))
+        
         for real_X_batches,real_Y_batches in self.utils.gan_data_generator():
             step += 1
             
@@ -491,7 +499,7 @@ class cycle_gan():
                 print('')
                 dis_X_loss = 0.0;dis_Y_loss = 0.0;xy_l = 0.0;yx_l = 0.0;xy_r = 0.0;yx_r = 0.0;fxy = 0.0;fyx = 0.0;yy_r = 0.0;xx_r = 0.0
                 
-            if step%saving_step==0:
+            if (type(saving_step) is int and step%saving_step==0) or (type(saving_step) is list and step in saving_step):
                 print('saving model!!!!......')
                 self.discriminator_saver.save(self.sess, dis_model_path, global_step=step)
                 self.generator_saver.save(self.sess, gen_model_path, global_step=step)
@@ -501,7 +509,7 @@ class cycle_gan():
 
     def test(self):
         sentence = 'hi'
-        gen_model_dir = os.path.join(self.model_dir,'generator/')
+        gen_model_dir = self.gen_dir
         self.sess.run(tf.global_variables_initializer())
         self.generator_saver.restore(self.sess, tf.train.latest_checkpoint(gen_model_dir))
         print('please enter one negative sentence')
@@ -521,24 +529,37 @@ class cycle_gan():
             pred_sent = self.utils.vec2sent(preds[0][0])
             print(pred_sent)
 
-    def file_test(self):
-        line_count = 0
-        #out_fp = open(self.data_dir+'/test_out.txt','w')
-        gen_model_dir = os.path.join(self.model_dir,'generator/')
+    def val(self):
+        gen_model_dir = os.path.join(self.model_dir,'generator_{}_{}/'.format(self.dis_it, self.gen_it))
+
         self.sess.run(tf.global_variables_initializer())
 
         if self.load != '':
-          self.generator_saver.restore(self.sess, self.load)
+          gen_model_path = '{}-{}'.format(os.path.join(gen_model_dir,'whole_model'), self.load)
+          print('load from {} ...'.format(gen_model_path))
+          self.generator_saver.restore(self.sess, gen_model_path)
         else:
+          print('load from {} ...'.format(tf.train.latest_checkpoint(gen_model_dir)))
           self.generator_saver.restore(self.sess, tf.train.latest_checkpoint(gen_model_dir))
-          
-        for test_batch, sents in self.utils.test_data_generator():
-            feed_dict = {self.X2Y_inputs:test_batch}
-            preds = self.sess.run([self.X2Y_test_outputs],feed_dict)
-            preds = preds[0]
-            for pred, s in zip(preds, sents):
-                #out_fp.write(s + ' -> ')
-                #out_fp.write(self.utils.vec2sent(pred) + '\n')
-                print "    {}\n->  {}\n".format(s, self.utils.vec2sent(pred))
-                line_count += 1
+        
+        cf = open(self.output + '_X2Y', 'w')
+        writer = csv.writer(cf, delimiter='|')
+        writer.writerow(['context', 'utterance'])
+
+        cf2 = open(self.output + '_Y2X', 'w')
+        writer2 = csv.writer(cf2, delimiter='|')
+        writer2.writerow(['context', 'utterance'])
+
+        for test_batch, sentx, senty in self.utils.test_data_generator():
+            feed_dict = {self.X2Y_inputs:test_batch, self.Y2X_inputs:test_batch}
+            x2y, y2x = self.sess.run([self.X2Y_test_outputs, self.Y2X_test_outputs],feed_dict)
+            
+            for s, y, x in zip(sentx, x2y, y2x):
+                writer.writerow([s, self.utils.vec2sent(y)])
+                writer2.writerow([s, self.utils.vec2sent(x)])
+
+        cf.close()
+        cf2.close()
+    
+
 

@@ -47,9 +47,8 @@ class utils():
 
 
     def sent2id(self,sent):
-        vec = np.zeros((self.sent_length),dtype=np.int32) + self.EOS_id
+        vec = np.ones((self.sent_length),dtype=np.int32) * self.EOS_id
 
-        #vec[0] = self.BOS_id
         i = 0
         for word in sent.decode('utf8').split():
             if word in self.word_id_dict:
@@ -59,20 +58,20 @@ class utils():
             i += 1
             if i>=self.sent_length:
                 break
-        while i < self.sent_length:
-          vec[i] = self.EOS_id
-          i += 1
         return vec
-
 
     def vec2sent(self,vecs):
         sent = []
         for vec in vecs:
             possible_words = self.word2vec_model.most_similar([vec],topn=10)
             word = possible_words[0][0]
-            sent.append(word)
-
-        return ' '.join(sent)
+            if word != '__EOS__':
+              sent.append(word)
+            else:
+              break
+        if sent == []:
+          sent = ['.']
+        return ''.join(sent)
 
 
     def id2sent(self,indices):
@@ -81,12 +80,12 @@ class utils():
             sent.append(self.id_word_dict[index])
         return ' '.join(sent)
 
-
+    """
     def data_generator(self,class_id):
         while(1):
             with open(self.data_train) as fp:
                 for line in fp:
-                    s = line.strip().split('+++$+++')
+                    s = line.strip().split(' +++$+++ ')
                     if int(s[0])==class_id and random.randint(0,10) >= 2:
                         yield self.sent2id(s[1].strip())
 
@@ -96,7 +95,7 @@ class utils():
 
     def Y_data_generator(self):
         return self.data_generator(1)
-
+    """
 
     def gan_data_generator(self):
         while(1):
@@ -104,7 +103,7 @@ class utils():
             one_Y_batch = []
             with open(self.data_train) as fp:
                 for line in fp:
-                    s = line.strip().split('+++$+++')
+                    s = line.strip().split(' +++$+++ ')
                     if int(s[0])==0 and random.randint(0,10) >= 3 and len(one_X_batch) < self.batch_size*self.num_batch:
                         one_X_batch.append(self.sent2id(s[1].strip()))
                     elif int(s[0])==1 and random.randint(0,10) >= 3 and len(one_Y_batch) < self.batch_size*self.num_batch:
@@ -116,20 +115,6 @@ class utils():
                         yield one_X_batch,one_Y_batch
                         one_X_batch = []
                         one_Y_batch = []
-        """
-        one_X_batch = []
-        one_Y_batch = []
-
-        for one_X,one_Y in zip(self.X_data_generator(),self.Y_data_generator()):
-            one_X_batch.append(one_X)
-            one_Y_batch.append(one_Y)
-            if len(one_X_batch) == self.batch_size*self.num_batch:
-                one_X_batch = np.array(one_X_batch).reshape(self.num_batch,self.batch_size,-1)
-                one_Y_batch = np.array(one_Y_batch).reshape(self.num_batch,self.batch_size,-1)
-                yield one_X_batch,one_Y_batch
-                one_X_batch = []
-                one_Y_batch = []
-        """
 
     def pretrain_generator_data_generator(self):
 
@@ -150,34 +135,25 @@ class utils():
                         yield one_X_batch,one_Y_batch
                         one_X_batch = []
                         one_Y_batch = []
-        """
-        for one_X,one_Y in zip(self.X_data_generator(),self.Y_data_generator()):
-            print 'one data pair ......'
-            one_X_batch.append(one_X)
-            one_Y_batch.append(one_Y)
-            if len(one_X_batch) == self.batch_size:
-                one_X_batch = np.array(one_X_batch)
-                one_Y_batch = np.array(one_Y_batch)
-                yield one_X_batch,one_Y_batch
-                one_X_batch = []
-                one_Y_batch = []
-                print 'one batch'
-        """
 
     def test_data_generator(self):
-        one_batch = np.zeros([self.batch_size,self.sent_length])
-        sents = []
+        one_batch = np.ones([self.batch_size,self.sent_length])
+        sentx = []
+        senty = []
         batch_count = 0
-        for line in open(FLAGS.data_dir+'/source_test'):
-            line = ' '.join(line.strip().split()[2:])
-            one_batch[batch_count] = self.sent2id(line)
-            sents.append(line)
+        for line in open(os.path.join(FLAGS.data_dir, 'source_test')):
+            x, y = line.strip().split(' +++$+++ ')
+            one_batch[batch_count] = self.sent2id(y)
+            sentx.append(''.join(x.split()))
+            senty.append(y)
             batch_count += 1
             if batch_count == self.batch_size:
-                yield one_batch, sents
+                yield one_batch, sentx, senty
                 batch_count = 0
                 one_batch = np.zeros([self.batch_size,self.sent_length])
-                sents = []
+                sentx = []
+                senty = []
 
         if batch_count >= 1:
-            yield one_batch, sents
+            yield one_batch, sentx, senty
+

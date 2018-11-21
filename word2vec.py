@@ -37,7 +37,7 @@ class MySentences(object):
       sent = line.split(' +++$+++ ')[1].split()
       sent = [w if w in word else '__UNK__' for w in sent]
       sent = ['__BOS__'] + sent
-      for _ in range(LEN + 2 -len(sent)):
+      for _ in range(LEN + 2 - len(sent)):
         sent = sent + ['__EOS__']
       sent[-1] = '__EOS__'
       yield sent
@@ -45,7 +45,7 @@ class MySentences(object):
 fre_word()
 
 sentences = MySentences(os.path.join(DIR, 'source_train'), os.path.join(DIR, 'word'))
-model = gensim.models.Word2Vec(sentences, size=200, window=5, min_count=5, workers=7, iter=10)
+model = gensim.models.Word2Vec(sentences, size=200, window=5, workers=7, iter=10)
 model.save(os.path.join(DIR, 'word_vec'))
 
 i = 0
