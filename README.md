@@ -41,6 +41,7 @@ these words would be trained in language model
 `python main.py --mode test`
 
 ### Important Hyperparameters of the flags.py
+`data_name` : database name  
 `batch_size` : batch size  
 `sequence_length` : max length of input and output sentence  
 `id_loss` : Use identity loss or not  

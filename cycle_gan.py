@@ -530,7 +530,7 @@ class cycle_gan():
             print(pred_sent)
 
     def val(self):
-        gen_model_dir = os.path.join(self.model_dir,'generator_{}_{}/'.format(self.dis_it, self.gen_it))
+        gen_model_dir = self.gen_dir
 
         self.sess.run(tf.global_variables_initializer())
 
