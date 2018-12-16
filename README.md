@@ -1,33 +1,63 @@
-# CycleGAN on Text Sentiment Transfer
-  Unsupervised learning sentiment transfer from negative to positive and vice versa.  
+# CycleGAN on Text Style Transfer
+  Unsupervised learning style transfer from negative to positive and vice versa.  
 
-## Implementation
-* I used improved WGAN to conduct adversarial training.
-* The two generators are pretrained by auto-encoder.
-* The generators directly generate a word embedding at each time step, instead of generating word distribution.
-* During testing, at each time step, I choose the word with maximum cosine similarity between generated word embedding as generated word.
+## Prerequisites
 
-## Training
-First pretrain generator by auto-encoder and create pretrai model:  
-`$ python3 main.py -train -mode pretrain -model_dir 'your model path'`  
-Load pretrain model and train cycleGAN:  
-`$ python3 main.py -train -mode all -model_dir 'your model path'`
+1. Python 2.7 or higher
+2. tensorflow-gpu 1.0.0 or 1.1.0
 
-## Testing
-  Requirement:  
-  Tensorflow 1.2.1  
-
-Run test:  
-`$ python2 main.py -test -model_dir cur_best2`  
+## Clone this repository
+`git clone https://github.com/adfsghjalison/CycleGAN_Style_Chatbot.git`
 
 
-#### Examples
-  i hate you->i love you  
-  i can't do that-> i can do that  
-  it's such a bad day-> it's such a good day  
-  such a sad day->such a happy day  
-  no it's not a good idea->it it ' s good idea  
+## Usage
 
-## Acknoledgement
-  The discriminator part of code I used can be found at:  
-  `https://github.com/igul222/improved_wgan_training`  
+### Data
+`mkdir data`  
+`mkdir data/data_[database_name]`  
+1. Put training data `source_train` and testing data `source_test` in `data/data_[database_name]`  
+format : one data a line  
+[style label] +++$+++ [sentence]
+
+2. Put the word dictionary `dict` in `data/data_[database_name]`  
+`dict` : a json file with  
+`word : word_id`  
+with `__BOS__`, `__EOS__`, `__UNK__`  
+
+3. Put the word file `word` in `data/data_[database_name]`   
+format: one word a line  
+these words would be trained in language model  
+
+### Train word to vector
+`python word2vec.py`
+
+### Pretrain Generator
+`python main.py --mode pretrain`
+
+### Train
+`python main.py --mode train`
+
+### Test
+`python main.py --mode test`
+
+### Important Hyperparameters of the flags.py
+`batch_size` : batch size  
+`sequence_length` : max length of input and output sentence  
+`id_loss` : Use identity loss or not  
+`dis_it` : discriminator training iterations  
+`gen_it` : generator training iterations  
+
+## Files
+
+### Folders
+`data/` : training data / testing data / dictionary file / word file  
+`model/` : saved trained models  
+
+### Files
+`word2vec.py` : train word to vector  
+`flags.py` : all settings  
+`utils.py` : data processing functions  
+`cycle_gan.py` : model architecture  
+`main.py` : main function  
+
+
