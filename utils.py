@@ -41,7 +41,12 @@ class utils():
         self.word2vec_model = gensim.models.Word2Vec.load(name)
         for i in range(len(self.id_word_dict)):
             word = self.id_word_dict[i].encode('utf8')
-            word_array.append(self.word2vec_model[word])
+            try:
+	            word_array.append(self.word2vec_model[word])
+	        except KeyError as e:
+	        	print('KeyError at word of: ', word)
+	        	print('[ERROR]', e)
+	        	raise KeyError(e)
 
         self.word_array = np.array(word_array)
 
