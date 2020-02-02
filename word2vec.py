@@ -43,8 +43,6 @@ class MySentences(object):
       sent[-1] = '__EOS__'
       yield sent
 
-fre_word()
-
 sentences = MySentences(os.path.join(DIR, 'source_train.txt'), os.path.join(DIR, 'word.txt'))
 model = word2vec.Word2Vec.load(os.path.join(DIR, 'word2vec.gensim.model'))
 model.build_vocab(sentences, update=True)

@@ -9,14 +9,14 @@ from flags import FLAGS
 class utils():
     def __init__(self,args):
         self.data_dir = FLAGS.data_dir
-        self.data_train = os.path.join(self.data_dir, 'source_train')
-        self.data_test = os.path.join(self.data_dir, 'source_test')
+        self.data_train = os.path.join(self.data_dir, 'source_train.txt')
+        self.data_test = os.path.join(self.data_dir, 'source_test.txt')
         self.num_batch = args.dis_it + args.gen_it + 1
         self.sent_length = args.sequence_length
         self.batch_size = args.batch_size
         
-        self.set_dictionary(os.path.join(self.data_dir, 'dict'))
-        self.set_word2vec_model(os.path.join(self.data_dir, 'word_vec'))
+        self.set_dictionary(os.path.join(self.data_dir, 'dict.json'))
+        self.set_word2vec_model(os.path.join(self.data_dir, 'word_vec.model'))
 
 
     def set_dictionary(self, dict_file):
@@ -141,7 +141,7 @@ class utils():
         sentx = []
         senty = []
         batch_count = 0
-        for line in open(os.path.join(FLAGS.data_dir, 'source_test')):
+        for line in open(os.path.join(FLAGS.data_dir, 'source_test.txt')):
             x, y = line.strip().split(' +++$+++ ')
             one_batch[batch_count] = self.sent2id(y)
             sentx.append(''.join(x.split()))
