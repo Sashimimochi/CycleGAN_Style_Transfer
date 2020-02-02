@@ -1,4 +1,5 @@
-import gensim, logging
+from gensim.models import word2vec
+import logging
 import os
 import json
 from collections import defaultdict
@@ -9,9 +10,9 @@ LEN = FLAGS.sequence_length
 DIR = FLAGS.data_dir
 
 def fre_word():
-    word_f = open(os.path.join(DIR, 'word'), 'w')
+    word_f = open(os.path.join(DIR, 'word.txt'), 'w')
     word_count = defaultdict(lambda: 0)
-    for i, l in enumerate(open(os.path.join(DIR, 'source_train'), 'r')):
+    for i, l in enumerate(open(os.path.join(DIR, 'source_train.txt'), 'r')):
       for w in l.split(' +++$+++ ')[1].split():
         word_count[w] += 1
     
@@ -44,15 +45,17 @@ class MySentences(object):
 
 fre_word()
 
-sentences = MySentences(os.path.join(DIR, 'source_train'), os.path.join(DIR, 'word'))
-model = gensim.models.Word2Vec(sentences, size=200, window=5, workers=7, iter=10)
-model.save(os.path.join(DIR, 'word_vec'))
+sentences = MySentences(os.path.join(DIR, 'source_train.txt'), os.path.join(DIR, 'word.txt'))
+model = word2vec.Word2Vec.load(os.path.join(DIR, 'word2vec.gensim.model'))
+model.build_vocab(sentences, update=True)
+model.train(sentences, total_examples=model.corpus_count, epochs=1000)
+model.save(os.path.join(DIR, 'word_vec.model'))
 
 i = 0
 word_id_dict = dict()
 for word in model.wv.vocab:
   word_id_dict[word] = i
   i += 1
-fp = open(os.path.join(DIR, 'dict'),'w')
+fp = open(os.path.join(DIR, 'dict.json'),'w')
 json.dump(word_id_dict,fp, ensure_ascii=False)
 

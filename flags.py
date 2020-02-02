@@ -8,7 +8,7 @@ tf.app.flags.DEFINE_string('model_dir', 'model', 'output model weight dir')
 tf.app.flags.DEFINE_string('data_dir', 'data', 'data dir')
 tf.app.flags.DEFINE_string('load', '', 'loaded model name')
 tf.app.flags.DEFINE_string('output', 'output', 'output dir')
-tf.app.flags.DEFINE_string('id_loss', False, 'id loss or not')
+tf.app.flags.DEFINE_boolean('id_loss', False, 'id loss or not')
 tf.app.flags.DEFINE_integer('batch_size', 36, 'batch size')
 #tf.app.flags.DEFINE_integer('latent_dim', 100, 'laten size')
 
