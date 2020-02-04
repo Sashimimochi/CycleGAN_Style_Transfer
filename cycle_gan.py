@@ -369,7 +369,8 @@ class cycle_gan():
                 cur_loss = 0.0
 
 
-            if step%saving_step==0:
+            #if step%saving_step==0:
+            if (type(saving_step) is int and step%saving_step==0) or (type(saving_step) is list and step in saving_step):
                 print('saving step : {}.........\n'.format(step))
                 saver.save(self.sess, model_path, global_step=step)
                 #saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
