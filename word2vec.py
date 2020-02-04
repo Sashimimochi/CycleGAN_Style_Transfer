@@ -1,4 +1,4 @@
-from gensim
+import gensim
 import logging
 import os
 import json
