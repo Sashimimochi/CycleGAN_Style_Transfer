@@ -1,4 +1,4 @@
-from gensim.models import word2vec
+from gensim
 import logging
 import os
 import json
@@ -44,10 +44,10 @@ class MySentences(object):
       yield sent
 
 sentences = MySentences(os.path.join(DIR, 'source_train.txt'), os.path.join(DIR, 'word.txt'))
-model = word2vec.Word2Vec.load(os.path.join(DIR, 'word2vec.gensim.model'))
+model = gensim.models.KeyedVectors.load_word2vec_format('./data/data_BG/word2vector.bin', binary=True)
 model.build_vocab(sentences, update=True)
 model.train(sentences, total_examples=model.corpus_count, epochs=1000)
-model.save(os.path.join(DIR, 'word_vec.model'))
+model.save(os.path.join(DIR, 'word_vec.bin'))
 
 i = 0
 word_id_dict = dict()
