@@ -16,7 +16,7 @@ class utils():
         self.batch_size = args.batch_size
         
         self.set_dictionary(os.path.join(self.data_dir, 'dict.json'))
-        self.set_word2vec_model(os.path.join(self.data_dir, 'word_vec.bin'))
+        self.set_word2vec_model(os.path.join(self.data_dir, 'word_vec.model'))
 
 
     def set_dictionary(self, dict_file):
@@ -38,7 +38,7 @@ class utils():
 
     def set_word2vec_model(self,name):
         word_array = []
-        self.word2vec_model = gensim.models.KeyedVectors.load_word2vec_format(name, binary=True)
+        self.word2vec_model = gensim.models.Word2Vec.load(name)
         for i in range(len(self.id_word_dict)):
             word = self.id_word_dict[i]
             try:
