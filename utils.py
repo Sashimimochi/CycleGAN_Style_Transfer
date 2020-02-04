@@ -55,7 +55,7 @@ class utils():
         vec = np.ones((self.sent_length),dtype=np.int32) * self.EOS_id
 
         i = 0
-        for word in sent.decode('utf8').split():
+        for word in sent.split():
             if word in self.word_id_dict:
                 vec[i] = self.word_id_dict[word]
             else:
