@@ -329,6 +329,10 @@ class cycle_gan():
 
     def pretrain(self):
         #use auto-encoder to pretrain the generator     
+        def output_log(o_dir, log):
+            with open(os.path.join(o_dir, 'pretrain_loss.csv'), 'a') as f:
+                f.write(log)
+
         step = 0
         saving_step = self.saving_step
         summary_step = self.printing_step
@@ -349,6 +353,9 @@ class cycle_gan():
           saver.restore(self.sess, ckpt.model_checkpoint_path)
           step = int(ckpt.model_checkpoint_path.split('-')[-1])
 
+        if not os.path.exists(os.path.join(model_dir, 'pretrain_loss.csv')):
+            output_log(model_dir, 'step,pretrain_loss\n')
+
         for X_batch,Y_batch in self.utils.pretrain_generator_data_generator():
             step += 1
 
@@ -366,6 +373,7 @@ class cycle_gan():
                 print('pred:')
                 print(self.utils.vec2sent(tt[0]))
                 print('{step}: generator_loss: {loss}\n'.format(step=step,loss=cur_loss/summary_step))
+                output_log(model_dir, '{step},{loss}\n'.format(step=step,loss=cur_loss/summary_step))
                 cur_loss = 0.0
 
 
